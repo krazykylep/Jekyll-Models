@@ -81,6 +81,14 @@
 #                          then you can set this to "car_temp". Do not include ".html".
 #                          By default, this is set to "template"
 #
+# previous:                Link to the previous model within a model list.
+#                          For example: A model list "car" has two models "audi" and "chevrolet".
+#                          "chevrolet.previous" is linked to model "audi", "audi.previous" is nil
+#
+# next:                    Link to the next model within a model list
+#                          For example: A model list "car" has two models "audi" and "chevrolet".
+#                          "audi.next" is linked to model "chevrolet", "chevrolet.next" is nil
+#
 # Update History: (most recent first)
 # 20-Jun-2012 kyle paulsen -- First public release.
 #------------------------------------------------------------------------
@@ -154,10 +162,13 @@ module JekyllModels
               "#{new_mdl["mdl_type"]}/#{new_mdl["mdl_name"]}"
             end
           end
-          
           models << new_mdl
         end
       end
+
+      # link next / previous model
+      self.link_next_previous(models)
+
       return models
     end
     
@@ -168,6 +179,19 @@ module JekyllModels
         ['.', '_', '#'].include?(e[0..0]) ||
         e[-1..-1] == '~' ||
         File.symlink?(e)
+      end
+    end
+
+    def link_next_previous(models)
+      models.each_with_index do |model, index|
+        # link to previous model
+        if index > 0
+          model['previous'] = models[index - 1]
+        end
+        # link to next model
+        if index < models.length-1
+          model['next'] = models[index+1]
+        end
       end
     end
     
