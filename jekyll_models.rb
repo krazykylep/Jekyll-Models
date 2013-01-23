@@ -57,6 +57,13 @@
 #                          absolute url in "mdl_url" in its own object. This is for 
 #                          convenience when hyperlinking to models.
 #
+# - jekyll_models_sort_by: Optional value to sort models by a key, e.g. "timestamp"?
+#                          If not a key is set, by default models are sorted by its YAML file names.
+#
+# - jekyll_models_sort_descending:
+#                          Optional direction to sort models in descending order. Only used if
+#                          "jekyll_models_sort_by" is set before. Default sort direction is ascending.
+#
 # Model Structure and Meaning:
 # In each model YAML file, some properties can be set to customize behaviour.
 # Other properties are automatically set. Here is a list of what's available:
@@ -90,45 +97,47 @@
 #                          "audi.next" is linked to model "chevrolet", "chevrolet.next" is nil
 #
 # Update History: (most recent first)
+# 23-Jan-2013 jens krause -- sorting models by a key
+# 13-Jan-2013 jens krause -- adding linked models
 # 20-Jun-2012 kyle paulsen -- First public release.
 #------------------------------------------------------------------------
 
 module JekyllModels
-  
+
   # A class for reading in all the model YAML defs and putting them in the global site
   # var for every page to see.
   class ModelLoader
-    
+
     attr_accessor :config
-    
+
     def initialize(config)
       if !config['jekyll_models']
         puts "ModelLoader: there are no models defined in the _config.yml! Aborting!"
         return
       end
-      
+
       self.config = config
       dirs = config['jekyll_models']
-      
+
       #make sure site base has a / on the end.
       if self.config["site_base"]
         if self.config["site_base"][-1,1] != "/"
           self.config["site_base"] += "/"
         end
       end
-      
+
       #set default value for generating pages
       self.config["jekyll_models_generate_pages"] = self.config["jekyll_models_generate_pages"] || "true"
-      
+
       #set default value for generation location style.
       self.config["jekyll_models_urls"] = self.config["jekyll_models_urls"] || "rest-like"
-      
+
       #read in model YAML files...
       dirs.each do |dir|
         config[dir] = read_directory(dir, File.join(config['source'], "_"+dir))
       end
     end
-    
+
     def read_directory(mdl_name, dir)
       models = []
       entries = Dir.chdir(dir) { filter_entries(Dir.entries('.')) }
@@ -137,33 +146,38 @@ module JekyllModels
         f_abs = File.join(dir, f)
         if !File.directory?(f_abs) && !File.symlink?(f_abs)
           new_mdl = YAML.load_file(f_abs)
-          
+
           # set model data...
           parts = f.split(".")
           new_mdl["mdl_name"] = File.basename(f, "."+parts.last)
           new_mdl["mdl_type"] = mdl_name
-          
+
           if new_mdl["timestamp"]
             new_mdl["timestamp"] = new_mdl["timestamp"].to_time
           else
             new_mdl["timestamp"] = File.mtime(f_abs)
           end
-          
+
           if self.config["site_base"]
             new_mdl["mdl_url"] = self.config["site_base"]
             new_mdl["mdl_url"] += case self.config['jekyll_models_urls']
-            when "rest-like"
-              "#{new_mdl["mdl_type"]}/#{new_mdl["mdl_name"]}"
-            when "models"
-              "#{new_mdl["mdl_type"]}/#{new_mdl["mdl_name"]}.html"
-            when "base"
-              "#{new_mdl["mdl_name"]}.html"
-            else
-              "#{new_mdl["mdl_type"]}/#{new_mdl["mdl_name"]}"
-            end
+                                    when "rest-like"
+                                      "#{new_mdl["mdl_type"]}/#{new_mdl["mdl_name"]}"
+                                    when "models"
+                                      "#{new_mdl["mdl_type"]}/#{new_mdl["mdl_name"]}.html"
+                                    when "base"
+                                      "#{new_mdl["mdl_name"]}.html"
+                                    else
+                                      "#{new_mdl["mdl_type"]}/#{new_mdl["mdl_name"]}"
+                                  end
           end
           models << new_mdl
         end
+      end
+
+      # sorting models
+      if self.config["jekyll_models_sort_by"]
+        self.sort(models, self.config["jekyll_models_sort_by"], self.config["jekyll_models_sort_descending"])
       end
 
       # link next / previous model
@@ -171,14 +185,14 @@ module JekyllModels
 
       return models
     end
-    
+
     def filter_entries(entries)
       entries = entries.reject do |e|
         ext = File.extname(e)
         (ext != ".txt" && ext != ".yml" && ext != ".yaml") ||
-        ['.', '_', '#'].include?(e[0..0]) ||
-        e[-1..-1] == '~' ||
-        File.symlink?(e)
+            ['.', '_', '#'].include?(e[0..0]) ||
+            e[-1..-1] == '~' ||
+            File.symlink?(e)
       end
     end
 
@@ -194,14 +208,19 @@ module JekyllModels
         end
       end
     end
-    
+
+    def sort(models, sort_by, descending)
+      models.sort! { |a, b| a[sort_by] <=> b[sort_by] }
+      models.reverse! if descending
+    end
+
   end
-  
+
   # Pretty much this entire class was borrowed from Jim Pravetz's product_generator plugin.
   # I found his blog here: http://jimpravetz.com/blog/2011/12/generating-jekyll-pages-from-data/
   # He is awesome for putting his code up on the web.
   class ModelPage < ::Jekyll::Page
-    
+
     # The resultant relative URL of where the published file will end up
     # Added for use by a sitemap generator
     attr_accessor :dest_url
@@ -225,17 +244,17 @@ module JekyllModels
       @dir  = dest_dir
       @dest_dir = dest_dir
       @dest_name = dest_name
-      @dest_url = File.join( '/', dest_dir ) 
+      @dest_url = File.join( '/', dest_dir )
       @src_mtime = data_mtime
 
       src_name_with_ext = File.join(base, src_dir, src_name)
-      
+
       @name = src_name_with_ext
       self.process(src_name_with_ext)
-      
+
       # Read the YAML from the specified page
       self.read_yaml(File.join(base, src_dir), src_name )
-      
+
       # Remember the mod time, used for site_map
       file_mtime = File.mtime( File.join(base, src_dir, src_name) )
       @src_mtime = file_mtime if file_mtime > @src_mtime
@@ -244,8 +263,8 @@ module JekyllModels
     # Override to set url properly
     def to_liquid
       self.data.deep_merge({
-        "url"        => @dest_url,
-        "content"    => self.content })
+                               "url"        => @dest_url,
+                               "content"    => self.content })
     end
 
     # Override so that we can control where the destination file goes
@@ -257,15 +276,15 @@ module JekyllModels
     end
 
   end
-  
+
   class ::Jekyll::ModelGenerator < ::Jekyll::Generator
     safe true
-    
+
     def initialize(config)
       #start loadin those YAML files now!
       ModelLoader.new(config)
     end
-    
+
     def generate(site)
       if site.config['jekyll_models_generate_pages'] && site.config['jekyll_models']
         puts "ModelLoader: Building model pages!"
@@ -276,22 +295,22 @@ module JekyllModels
         end
       end
     end
-    
+
     #writes the list page for this model type
     def write_model_index(site, model_name)
       case site.config["jekyll_models_urls"]
-      when "base"
-        index = ModelPage.new(site, site.config['source'], "", model_name+'.html', "_"+model_name, 'index.html', Time.parse("1900-01-01"))
-      else
-        index = ModelPage.new(site, site.config['source'], model_name, 'index.html', "_"+model_name, 'index.html', Time.parse("1900-01-01"))
+        when "base"
+          index = ModelPage.new(site, site.config['source'], "", model_name+'.html', "_"+model_name, 'index.html', Time.parse("1900-01-01"))
+        else
+          index = ModelPage.new(site, site.config['source'], model_name, 'index.html', "_"+model_name, 'index.html', Time.parse("1900-01-01"))
       end
-      
+
       index.render(site.layouts, site.site_payload)
       index.write(site.dest)
       # Record the fact that this page has been added, otherwise Site::cleanup will remove it.
       site.pages << index
     end
-    
+
     #writes each model page and sends in the model through page.model
     def write_model_instance_indexes(site, model_name)
       models = site.config[model_name]
@@ -300,20 +319,20 @@ module JekyllModels
         if mdl['template']
           template_file = mdl['template'] + ".html"
         end
-        
+
         case site.config["jekyll_models_urls"]
-        when "rest-like"
-          index = ModelPage.new(site, site.config['source'], File.join(model_name, mdl['mdl_name']), 'index.html', "_"+model_name, template_file, mdl['timestamp'])
-        when "models"
-          index = ModelPage.new(site, site.config['source'], model_name, mdl['mdl_name']+'.html', "_"+model_name, template_file, mdl['timestamp'])
-        when "base"
-          index = ModelPage.new(site, site.config['source'], "", mdl['mdl_name']+'.html', "_"+model_name, template_file, mdl['timestamp'])
-        else
-          index = ModelPage.new(site, site.config['source'], File.join(model_name, mdl['mdl_name']), 'index.html', "_"+model_name, template_file, mdl['timestamp'])
+          when "rest-like"
+            index = ModelPage.new(site, site.config['source'], File.join(model_name, mdl['mdl_name']), 'index.html', "_"+model_name, template_file, mdl['timestamp'])
+          when "models"
+            index = ModelPage.new(site, site.config['source'], model_name, mdl['mdl_name']+'.html', "_"+model_name, template_file, mdl['timestamp'])
+          when "base"
+            index = ModelPage.new(site, site.config['source'], "", mdl['mdl_name']+'.html', "_"+model_name, template_file, mdl['timestamp'])
+          else
+            index = ModelPage.new(site, site.config['source'], File.join(model_name, mdl['mdl_name']), 'index.html', "_"+model_name, template_file, mdl['timestamp'])
         end
-        
+
         index.data['model'] = mdl
-        
+
         index.render(site.layouts, site.site_payload)
         index.write(site.dest)
         # Record the fact that this page has been added, otherwise Site::cleanup will remove it.
@@ -321,5 +340,5 @@ module JekyllModels
       end
     end
   end
-  
+
 end
