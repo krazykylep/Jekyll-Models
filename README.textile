@@ -55,4 +55,7 @@ In each model YAML file, some properties can be set to customize behaviour. Othe
 ** You may specify what template this model should use to help generate it. For example, if you have the template "car&#95;temp.html" then you can set this to "car&#95;temp". Do not include ".html". By default, this is set to "template"
 
 h2. Update History: (most recent first)
+* 01-June-2014 Jens Krause (sectore) -- Jekyll 2 support
+* 23-Jan-2013 Jens Krause (sectore) -- sorting models by a key
+* 13-Jan-2013 Jens Krause (sectore) -- adding linked models
 * 20-Jun-2012 kyle paulsen -- First public release. 
